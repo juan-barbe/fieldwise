@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INC — Análisis de Inversión en Tierras</title>
+    <meta name="description"
+        content="Dashboard de análisis económico de ofrecimientos de tierra del Instituto Nacional de Colonización de Uruguay">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="logo-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                        <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                </div>
+                <div>
+                    <h1>Análisis de Inversión en Tierras</h1>
+                    <p class="header-subtitle">Instituto Nacional de Colonización — Uruguay</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="header-badge">
+                    <span class="badge-dot"></span>
+                    <span id="filteredCount">—</span> / <span id="totalCount">—</span> registros
+                </div>
+                <div class="header-badge source-badge">
+                    <a href="https://catalogodatos.gub.uy/dataset/instituto-nacional-de-colonizacion-ofrecimientos-de-tierra"
+                        target="_blank" rel="noopener">
+                        Datos Abiertos
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="filter-bar">
+        <div class="filter-content">
+            <div class="filter-group">
+                <label for="filterDepto">Departamento</label>
+                <select id="filterDepto">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterTipo">Tipo</label>
+                <select id="filterTipo">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterNegocio">Negocio</label>
+                <select id="filterNegocio">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterEstado">Ocupación</label>
+                <select id="filterEstado">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterMinYear">Desde</label>
+                <select id="filterMinYear">
+                    <option value="">—</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterMaxYear">Hasta</label>
+                <select id="filterMaxYear">
+                    <option value="">—</option>
+                </select>
+            </div>
+            <button class="filter-reset" id="btnReset" title="Limpiar filtros">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                </svg>
+                Limpiar
+            </button>
+        </div>
+    </section>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-bar">
+        <button class="tab-btn active" data-tab="tabDashboard">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            Dashboard
+        </button>
+        <button class="tab-btn" data-tab="tabIncremento">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                <polyline points="17 6 23 6 23 12" />
+            </svg>
+            Incremento de Precios
+        </button>
+    </nav>
+
+    <main class="main-content tab-content" id="tabDashboard">
+        <!-- KPI Cards -->
+        <section class="kpi-section">
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-blue">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Transacciones</span>
+                    <span class="kpi-value" id="kpiTransacciones">—</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-green">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23" />
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Valor Total</span>
+                    <span class="kpi-value" id="kpiValorTotal">—</span>
+                    <span class="kpi-unit">USD</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-cyan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="M3 9h18" />
+                        <path d="M9 21V9" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Superficie Total</span>
+                    <span class="kpi-value" id="kpiSuperficie">—</span>
+                    <span class="kpi-unit">hectáreas</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-purple">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Precio Promedio</span>
+                    <span class="kpi-value" id="kpiAvgPrecio">—</span>
+                    <span class="kpi-unit">USD / ha</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-orange">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5" />
+                        <path d="M2 12l10 5 10-5" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Precio Mediano</span>
+                    <span class="kpi-value" id="kpiMedianPrecio">—</span>
+                    <span class="kpi-unit">USD / ha</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Maps -->
+        <section class="charts-row maps-row">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Precio Promedio por Hectárea</h2>
+                    <p class="chart-desc">USD/ha por departamento — escala de color</p>
+                </div>
+                <div class="map-container" id="mapPrecio"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Cantidad de Transacciones</h2>
+                    <p class="chart-desc">Ofrecimientos por departamento</p>
+                </div>
+                <div class="map-container" id="mapCount"></div>
+            </div>
+        </section>
+
+        <!-- Distributions -->
+        <section class="charts-row dist-row">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Distribución de Precio Total</h2>
+                    <p class="chart-desc">Frecuencia por rango de monto (USD)</p>
+                </div>
+                <div class="chart-body"><canvas id="histPrecio"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Distribución de Superficie</h2>
+                    <p class="chart-desc">Frecuencia por rango de hectáreas</p>
+                </div>
+                <div class="chart-body"><canvas id="histSuperficie"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Distribución de Precio/ha</h2>
+                    <p class="chart-desc">Frecuencia de USD por hectárea</p>
+                </div>
+                <div class="chart-body"><canvas id="histPrecioHa"></canvas></div>
+            </div>
+        </section>
+
+        <!-- Timeline (full width, prominent) -->
+        <section class="charts-row">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>📈 Evolución Temporal del Mercado</h2>
+                    <p class="chart-desc">Ofrecimientos mensuales, valor acumulado y media móvil de 6 meses</p>
+                </div>
+                <div class="chart-body" style="height:420px"><canvas id="chartTimeline"></canvas></div>
+            </div>
+        </section>
+
+        <!-- Scatter + Dept Bar -->
+        <section class="charts-row two-col">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Precio vs. Superficie</h2>
+                    <p class="chart-desc">Relación precio-tamaño de cada ofrecimiento</p>
+                </div>
+                <div class="chart-body chart-body-tall"><canvas id="scatterPlot"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Precio Promedio/ha por Departamento</h2>
+                    <p class="chart-desc">Ranking de departamentos por precio medio</p>
+                </div>
+                <div class="chart-body chart-body-tall"><canvas id="chartBarDepto"></canvas></div>
+            </div>
+        </section>
+
+        <!-- Tipo/Negocio/Ocupacion -->
+        <section class="charts-row">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Composición del Mercado</h2>
+                    <p class="chart-desc">Tipo de ofrecimiento, negocio y estado de ocupación</p>
+                </div>
+                <div class="chart-body-triple">
+                    <div class="mini-chart">
+                        <h3>Tipo</h3>
+                        <div class="mini-chart-wrap"><canvas id="chartTipo"></canvas></div>
+                    </div>
+                    <div class="mini-chart">
+                        <h3>Negocio</h3>
+                        <div class="mini-chart-wrap"><canvas id="chartNegocio"></canvas></div>
+                    </div>
+                    <div class="mini-chart">
+                        <h3>Ocupación</h3>
+                        <div class="mini-chart-wrap"><canvas id="chartOcupacion"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Department Table -->
+        <section class="table-section">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Economía por Departamento</h2>
+                    <p class="chart-desc">Métricas clave para análisis de inversión — haga clic en encabezados para
+                        ordenar</p>
+                </div>
+                <div class="table-wrapper">
+                    <table id="deptoTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="name" class="sortable active-sort">Departamento ▼</th>
+                                <th data-sort="count" class="sortable num">Transac.</th>
+                                <th data-sort="totalVal" class="sortable num">Valor Total (USD)</th>
+                                <th data-sort="totalHa" class="sortable num">Sup. Total (ha)</th>
+                                <th data-sort="avgPxHa" class="sortable num">Prom. USD/ha</th>
+                                <th data-sort="medPxHa" class="sortable num">Mediana USD/ha</th>
+                                <th data-sort="minPxHa" class="sortable num">Mín. USD/ha</th>
+                                <th data-sort="maxPxHa" class="sortable num">Máx. USD/ha</th>
+                                <th data-sort="avgSize" class="sortable num">Prom. ha</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptoTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Transactions Table -->
+        <section class="table-section">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Operaciones de Mayor Valor</h2>
+                    <p class="chart-desc">Las 20 operaciones más relevantes por monto</p>
+                </div>
+                <div class="table-wrapper">
+                    <table id="topTable">
+                        <thead>
+                            <tr>
+                                <th>Expediente</th>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Departamento</th>
+                                <th class="num">Superficie (ha)</th>
+                                <th class="num">Precio (USD)</th>
+                                <th class="num">USD/ha</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Incremento de Precios Tab -->
+    <main class="main-content tab-content hidden" id="tabIncremento">
+        <!-- Incremento KPIs -->
+        <section class="kpi-section">
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-green">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                        <polyline points="17 6 23 6 23 12" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Mayor Incremento</span>
+                    <span class="kpi-value" id="kpiMaxIncDepto">—</span>
+                    <span class="kpi-unit" id="kpiMaxIncPct"></span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-red">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+                        <polyline points="17 18 23 18 23 12" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Menor Incremento</span>
+                    <span class="kpi-value" id="kpiMinIncDepto">—</span>
+                    <span class="kpi-unit" id="kpiMinIncPct"></span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-purple">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Promedio Nacional</span>
+                    <span class="kpi-value" id="kpiAvgIncPct">—</span>
+                    <span class="kpi-unit">variación</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-cyan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Período Analizado</span>
+                    <span class="kpi-value" id="kpiIncPeriodo">—</span>
+                    <span class="kpi-unit">5 años</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Window Selector -->
+        <section class="window-selector-section">
+            <div class="window-selector">
+                <label for="incWindowRange">Ventana de comparación:</label>
+                <input type="range" id="incWindowRange" min="1" max="25" value="5" step="1">
+                <span class="window-value" id="incWindowLabel">5 años</span>
+            </div>
+        </section>
+
+        <!-- Incremento Map + Bar Chart -->
+        <section class="charts-row two-col">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>🗺️ Mapa de Incremento de Precios</h2>
+                    <p class="chart-desc">Variación porcentual del precio promedio USD/ha en 5 años</p>
+                </div>
+                <div class="map-container" id="mapIncremento"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>📊 Ranking por Incremento</h2>
+                    <p class="chart-desc">Departamentos ordenados por variación porcentual</p>
+                </div>
+                <div class="chart-body chart-body-tall"><canvas id="chartIncrementoBar"></canvas></div>
+            </div>
+        </section>
+
+        <!-- Trend line chart (full width) -->
+        <section class="charts-row">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>📈 Evolución Anual de Precios por Departamento</h2>
+                    <p class="chart-desc">Precio promedio USD/ha por año — cada línea representa un departamento</p>
+                </div>
+                <div class="chart-body" style="height:450px"><canvas id="chartIncrementoTrend"></canvas></div>
+            </div>
+        </section>
+
+        <!-- Detail Table -->
+        <section class="table-section">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2>Detalle de Incremento por Departamento</h2>
+                    <p class="chart-desc">Comparación de precios promedio entre el primer y último año del período —
+                        haga clic en encabezados para ordenar</p>
+                </div>
+                <div class="table-wrapper">
+                    <table id="incrementoTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="name" class="sortable-inc active-sort-inc">Departamento ▼</th>
+                                <th data-sort="startPrice" class="sortable-inc num">Precio Inicio (USD/ha)</th>
+                                <th data-sort="endPrice" class="sortable-inc num">Precio Final (USD/ha)</th>
+                                <th data-sort="absChange" class="sortable-inc num">Cambio Absoluto</th>
+                                <th data-sort="pctChange" class="sortable-inc num">Cambio %</th>
+                                <th data-sort="txCount" class="sortable-inc num">Transacciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incrementoTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>Fuente: <a
+                href="https://catalogodatos.gub.uy/dataset/instituto-nacional-de-colonizacion-ofrecimientos-de-tierra"
+                target="_blank">Catálogo de Datos Abiertos</a> — Instituto Nacional de Colonización, Uruguay</p>
+    </footer>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Cargando datos...</p>
+    </div>
+
+    <div id="mapTooltip" class="map-tooltip"></div>
+
+    <script src="dashboard.js"></script>
+</body>
+
+</html>
