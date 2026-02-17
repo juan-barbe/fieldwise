@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     Chart.defaults.plugins.legend.labels.usePointStyle = true;
     Chart.defaults.plugins.legend.labels.pointStyle = 'rectRounded';
 
-    Promise.all([loadCSV(), loadGeoJSON()]).then(() => {
+    Promise.all([loadCSV(), loadGeoJSON(), loadConeatMap()]).then(() => {
         populateFilters();
         bindFilters();
         bindTabs();
@@ -54,6 +54,16 @@ function loadGeoJSON() {
         .then(r => r.json())
         .then(d => { GEO_DATA = d; })
         .catch(e => console.warn('GeoJSON no disponible:', e));
+}
+
+// Global CONEAT Map
+let CONEAT_MAP = {};
+
+function loadConeatMap() {
+    return fetch('coneat_groups.json')
+        .then(r => r.json())
+        .then(d => { CONEAT_MAP = d; })
+        .catch(e => console.warn('CONEAT Map not loaded:', e));
 }
 
 function cleanData(raw) {
@@ -186,6 +196,10 @@ function applyFilters() {
         return true;
     });
     renderAll();
+    // Re-render soils map if active, with new filters
+    if (ACTIVE_TAB === 'tabSuelos') {
+        renderSuelosMap();
+    }
 }
 
 // ===== Render Pipeline =====
@@ -199,7 +213,136 @@ function renderAll() {
     renderMiniCharts();
     renderDeptoTable(FILTERED);
     renderTopTable();
+    renderTopTable();
     renderIncremento();
+    // renderSuelosMap(); // Lazy load on tab switch
+}
+
+// ========== SUELOS TAB (LEAFLET) ==========
+let suelosMap = null;
+let suelosLayer = null;
+
+async function renderSuelosMap() {
+    const mapContainer = document.getElementById('mapSuelos');
+    // Security check: only render if container exists and is visible
+    if (!mapContainer || mapContainer.offsetParent === null) return;
+
+    if (!suelosMap) {
+        suelosMap = L.map('mapSuelos').setView([-32.522779, -55.765835], 7);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19
+        }).addTo(suelosMap);
+    }
+
+    try {
+        if (!window.SOLD_PARCELS_DATA) {
+            const response = await fetch('sold_parcels.geojson');
+            window.SOLD_PARCELS_DATA = await response.json();
+        }
+        const data = window.SOLD_PARCELS_DATA;
+
+        // FILTER LOGIC:
+        // We only want to show parcels that appear in the current FILTERED list.
+        // The FILTERED list contains transactions. Each transaction has 'departamentos' and 'Padrones'.
+        // We need a lookup of allowed (Depto, Padron) pairs.
+
+        const allowed = new Set();
+        FILTERED.forEach(r => {
+            // r.departamentos is array of dept names
+            // r.Padrones string needs parsing or we can rely on extracted data?
+            // The 'cleanData' doesn't fully parse padrones into a list of IDs attached to the object, 
+            // only 'departamentos'. 
+            // However, the GeoJSON has 'Expediente'. We can filter by Expediente!
+            if (r.expediente) allowed.add(r.expediente);
+        });
+
+        // specific for multi-padron checks: 
+        // A parcel in GeoJSON has 'Expediente' property. 
+        // If that expediente is in our allowed stats, show it.
+        // Note: one expedient might have multiple padrones vs multiple rows.
+        // The CSV parser for geojson generation used 'Expediente' column.
+
+        const filteredFeatures = data.features.filter(f => allowed.has(f.properties.Expediente));
+
+        // Update KPIs based on filtered data
+        const total = filteredFeatures.length;
+
+        let sumIndex = 0;
+        let countIndex = 0;
+
+        // Enrich features with Index
+        filteredFeatures.forEach(f => {
+            const g = (f.properties.CONEAT_SC || '').trim();
+            const idx = CONEAT_MAP[g];
+            if (idx !== undefined) {
+                sumIndex += idx;
+                countIndex++;
+                f.properties._coneatIndex = idx;
+            } else {
+                f.properties._coneatIndex = null;
+            }
+        });
+
+        const avgIndex = countIndex > 0 ? Math.round(sumIndex / countIndex) : '—';
+
+        document.getElementById('kpiSuelosCount').textContent = fmt(total);
+
+        // Update label to "Índice Promedio"
+        const kpiLabel = document.getElementById('kpiSueloDom').closest('.kpi-card').querySelector('.kpi-label');
+        if (kpiLabel) kpiLabel.textContent = 'Índice Promedio';
+
+        document.getElementById('kpiSueloDom').textContent = avgIndex;
+        // Update unit
+        const kpiUnit = document.getElementById('kpiSueloDom').closest('.kpi-card').querySelector('.kpi-unit');
+        if (kpiUnit) kpiUnit.textContent = 'puntos CONEAT';
+
+        if (suelosLayer) suelosMap.removeLayer(suelosLayer);
+
+        function getIndexColor(val) {
+            if (val == null) return '#334155';
+            if (val < 50) return '#ef4444';
+            if (val < 80) return '#f97316';
+            if (val < 110) return '#eab308';
+            if (val < 150) return '#84cc16';
+            if (val < 190) return '#22c55e';
+            return '#15803d';
+        }
+
+        suelosLayer = L.geoJSON({ type: 'FeatureCollection', features: filteredFeatures }, {
+            style: f => ({
+                fillColor: getIndexColor(f.properties._coneatIndex),
+                weight: 1, opacity: 0.8, color: '#fff', dashArray: '3', fillOpacity: 0.7
+            }),
+            onEachFeature: (f, l) => {
+                const p = f.properties;
+                const idx = p._coneatIndex != null ? p._coneatIndex : 'N/A';
+                const color = getIndexColor(idx);
+                l.bindPopup(`
+                    <div style="font-family:'Inter';font-size:12px;color:#0f172a;line-height:1.4">
+                        <strong style="font-size:13px;display:block;margin-bottom:4px">Padrón ${p.PADRON}</strong>
+                        <span style="color:#64748b;font-size:11px">${p.NOMDEPTO}</span>
+                        <hr style="margin:6px 0;opacity:0.2">
+                        <div><b>Índice CONEAT:</b> <span style="font-weight:700;color:${color}">${idx}</span></div>
+                        <div style="font-size:11px;color:#64748b">Grupo: ${p.CONEAT_SC || 'N/A'}</div>
+                        <div style="margin-top:4px"><b>Precio:</b> U$S ${Math.round(p.Venta_PxHa).toLocaleString()}/ha</div>
+                        <div style="color:#64748b;font-size:11px">${p.Venta_Fecha}</div>
+                    </div>
+                `);
+                l.on('mouseover', e => {
+                    const layer = e.target;
+                    layer.setStyle({ weight: 2, color: '#fff', fillOpacity: 1, dashArray: '' });
+                    layer.bringToFront();
+                });
+                l.on('mouseout', e => { suelosLayer.resetStyle(e.target); });
+            }
+        }).addTo(suelosMap);
+
+
+        // Filter functionality could be added here (hiding features not in FILTERED list)
+        // For now, we show all sold parcels to map the full dataset.
+        // We could filter based on 'Expediente' which exists in both.
+
+    } catch (e) { console.error(e); }
 }
 
 // ===== KPIs =====
@@ -693,9 +836,13 @@ function bindTabs() {
             btn.classList.add('active');
             document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
             document.getElementById(tabId).classList.remove('hidden');
-            // Re-render increment charts when switching to that tab (canvas size fix)
+
+            // Re-render charts/maps if needed when tab becomes visible
             if (tabId === 'tabIncremento') {
                 setTimeout(() => renderIncremento(), 50);
+            }
+            if (tabId === 'tabSuelos') {
+                setTimeout(() => renderSuelosMap(), 200);
             }
         });
     });
